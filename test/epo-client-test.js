@@ -55,4 +55,36 @@ describe('EpoClient event callbacks', function () {
     epoClient2.removeThreatEventCallback(sharedCallback, topic1)
     expect(dxlClient2.registered[topic1]).to.be.empty
   })
+
+  it('ignores malformed or non-object threat event payloads without throwing', function () {
+    const dxlClient = createMockDxlClient()
+    const epoClient = new EpoClient(dxlClient, 'epo1')
+    const received = []
+    const topic = '/mcafee/event/epo/threat/response'
+
+    epoClient.addThreatEventCallback(function (payload) {
+      received.push(payload)
+    }, topic)
+
+    const wrapper = dxlClient.registered[topic][0]
+    expect(function () {
+      wrapper({ payload: Buffer.from('not-json') })
+      wrapper({ payload: Buffer.from('null') })
+      wrapper({ payload: Buffer.from('"string"') })
+      wrapper({ payload: Buffer.from('{"eventId": 1}') })
+    }).to.not.throw()
+
+    expect(received).to.deep.equal([{ eventId: 1 }])
+  })
+
+  it('rejects invalid command names in runCommand', function () {
+    const dxlClient = createMockDxlClient()
+    const epoClient = new EpoClient(dxlClient, 'epo1')
+    const invalidNames = ['', 'system/find', 'system.#', 'system.+', 'system.find\0']
+    invalidNames.forEach(function (badName) {
+      expect(function () {
+        epoClient.runCommand(badName, {})
+      }).to.throw(TypeError)
+    })
+  })
 })
